@@ -6,6 +6,7 @@ import org.photonvision.PhotonPoseEstimator;
 import org.photonvision.PhotonPoseEstimator.PoseStrategy;
 import org.photonvision.simulation.PhotonCameraSim;
 import org.photonvision.simulation.SimCameraProperties;
+import org.photonvision.targeting.PhotonPipelineResult;
 
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -32,7 +33,7 @@ public class CameraSim {
         photonPoseEstimator = new PhotonPoseEstimator(
                 CowboyUtils.aprilTagFieldLayout,
                 PoseStrategy.MULTI_TAG_PNP_ON_COPROCESSOR,
-                camera, positionTransform3d);
+                positionTransform3d);
         photonPoseEstimator.setMultiTagFallbackStrategy(PhotonPoseEstimator.PoseStrategy.LOWEST_AMBIGUITY);
     }
 
@@ -43,7 +44,7 @@ public class CameraSim {
     public Optional<EstimatedRobotPose> getEstimatedGlobalPose(Pose2d prevEstimatedRobotPose) {
         if (SubsystemEnabledConstants.VISION_SUBSYSTEM_ENABLED) {
             photonPoseEstimator.setReferencePose(prevEstimatedRobotPose);
-            return photonPoseEstimator.update();
+            return photonPoseEstimator.update(new PhotonPipelineResult());
         } else {
             return null;
         }

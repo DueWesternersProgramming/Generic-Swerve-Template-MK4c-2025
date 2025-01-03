@@ -3,6 +3,7 @@ package frc.robot.subsystems.vision;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import frc.robot.RobotState;
 import frc.robot.RobotConstants.SubsystemEnabledConstants;
 import frc.robot.RobotConstants.VisionConstants;
 import frc.robot.subsystems.drive.DriveSubsystem;
@@ -49,11 +50,9 @@ public class VisionSubsystem extends SubsystemBase {
         for (int i = 0; i < cameraNames.length; i++) {
             try{
                 if (RobotBase.isSimulation()) {
-                list[i] = cameraSims[i].getEstimatedGlobalPose(DriveSubsystem.getPose().orElseThrow())
-                        .get().estimatedPose.toPose2d();
+                list[i] = cameraSims[i].getEstimatedGlobalPose(RobotState.robotPose).get().estimatedPose.toPose2d();
                 } else {
-                    list[i] = cameras[i].getEstimatedGlobalPose(DriveSubsystem.getPose().orElseThrow()).get().estimatedPose
-                            .toPose2d();
+                    list[i] = cameras[i].getEstimatedGlobalPose(RobotState.robotPose).get().estimatedPose.toPose2d();
                 }
         
             }
@@ -73,7 +72,7 @@ public class VisionSubsystem extends SubsystemBase {
     public void periodic() {
         if (SubsystemEnabledConstants.VISION_SUBSYSTEM_ENABLED) {
             if (RobotBase.isSimulation()) {
-                visionSim.update(DriveSubsystem.getPose().orElseThrow());
+                visionSim.update(RobotState.robotPose);
             }
         }
     }

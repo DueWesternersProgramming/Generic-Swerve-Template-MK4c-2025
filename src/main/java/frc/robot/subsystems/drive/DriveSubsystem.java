@@ -17,6 +17,7 @@ import edu.wpi.first.math.util.Units;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.networktables.StructArrayPublisher;
 import edu.wpi.first.util.WPIUtilJNI;
+import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.SPI.Port;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
@@ -25,6 +26,7 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.RobotConstants;
+import frc.robot.RobotState;
 import frc.robot.utils.CowboyUtils;
 import frc.robot.RobotConstants.DrivetrainConstants;
 import frc.robot.RobotConstants.SubsystemEnabledConstants;
@@ -35,6 +37,10 @@ import frc.robot.subsystems.vision.VisionSubsystem;
 import frc.robot.RobotConstants.AutonomousConstants;
 import frc.robot.utils.SwerveUtils;
 import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.config.PIDConstants;
+import com.pathplanner.lib.config.RobotConfig;
+import com.pathplanner.lib.controllers.PPHolonomicDriveController;
+
 import edu.wpi.first.wpilibj.Timer;
 
 /**
@@ -45,6 +51,7 @@ import edu.wpi.first.wpilibj.Timer;
 public class DriveSubsystem extends SubsystemBase {
     private SwerveModuleSim[] swerveModuleSims = new SwerveModuleSim[4];
     private SwerveModule[] swerveModules = new SwerveModule[4];
+    RobotConfig config;
     private static AHRS m_gyro;
 
     private double m_currentRotation = 0.0;
@@ -126,17 +133,38 @@ public class DriveSubsystem extends SubsystemBase {
             }
         }
 
-        AutoBuilder.configureHolonomic(
-                m_odometry::getEstimatedPosition, // Robot pose supplier
-                this::resetOdometry, // Method to reset odometry (will be called if your auto has a starting pose)
-                this::getChassisSpeeds, // ChassisSpeeds supplier. MUST BE ROBOT RELATIVE
-                this::pathFollowDrive,
-                AutonomousConstants.HOLONOMIC_PATH_FOLLOWER_CONFIG,
-                () -> {
-                    return AutonomousConstants.FLIP_PATHPLANNER_AUTOS;
-                },
-                this // Reference to this subsystem to set requirements
-        );
+        
+    try{
+      config = RobotConfig.fromGUISettings();
+    } catch (Exception e) {
+      // Handle exception as needed
+      e.printStackTrace();
+    }
+    
+    // Configure AutoBuilder last
+    AutoBuilder.configure(
+            DriveSubsystem::getPose, // Robot pose supplier
+            this::resetPose, // Method to reset odometry (will be called if your auto has a starting pose)
+            this::getChassisSpeeds, // ChassisSpeeds supplier. MUST BE ROBOT RELATIVE
+            (speeds) -> runChassisSpeeds(speeds, false), // Method that will drive the robot given ROBOT RELATIVE ChassisSpeeds. Also optionally outputs individual module feedforwards
+            new PPHolonomicDriveController( // PPHolonomicController is the built in path following controller for holonomic drive trains
+                    new PIDConstants(5.0, 0.0, 0.0), // Translation PID constants
+                    new PIDConstants(5.0, 0.0, 0.0) // Rotation PID constants
+            ),
+            config, // The robot configuration
+            () -> {
+              // Boolean supplier that controls when the path will be mirrored for the red alliance
+              // This will flip the path being followed to the red side of the field.
+              // THE ORIGIN WILL REMAIN ON THE BLUE SIDE
+
+              var alliance = DriverStation.getAlliance();
+              if (alliance.isPresent()) {
+                return alliance.get() == DriverStation.Alliance.Red;
+              }
+              return false;
+            },
+            this // Reference to this subsystem to set requirements
+    );
     }
 
     private double getGyroAngle() {
@@ -179,7 +207,7 @@ public class DriveSubsystem extends SubsystemBase {
                     swerveModules[2].getTurningAbsoluteEncoder().getPosition(),
                     swerveModules[3].getTurningAbsoluteEncoder().getPosition()
             });
-            SmartDashboard.putData("NAVX", m_gyro);
+            //SmartDashboard.putData("NAVX", m_gyro);
 
         }
 
@@ -228,6 +256,7 @@ public class DriveSubsystem extends SubsystemBase {
                     });
         }
         field.setRobotPose(m_odometry.getEstimatedPosition());
+        RobotState.updatePose(m_odometry.getEstimatedPosition());
     }
 
     private void updateVisionMeasurements() {
@@ -254,9 +283,12 @@ public class DriveSubsystem extends SubsystemBase {
         }
     }
 
-    public static Optional<Pose2d> getPose() {
-        return SubsystemEnabledConstants.DRIVE_SUBSYSTEM_ENABLED ? Optional.of(m_odometry.getEstimatedPosition())
-                : Optional.empty();
+    public static Pose2d getPose() {
+        return SubsystemEnabledConstants.DRIVE_SUBSYSTEM_ENABLED ? m_odometry.getEstimatedPosition() : new Pose2d();
+    }
+
+    public void resetPose(Pose2d pose) {
+        resetOdometry(pose);
     }
 
     public void resetOdometry(Pose2d pose) {
@@ -386,9 +418,9 @@ public class DriveSubsystem extends SubsystemBase {
     }
 
     public void runChassisSpeeds(ChassisSpeeds speeds, Boolean fieldRelative) {
-        Rotation2d rotation = Rotation2d.fromDegrees(
+        Rotation2d rotation = RobotBase.isSimulation() ? Rotation2d.fromDegrees(
                 getGyroAngle()
-                        + (CowboyUtils.isRedAlliance() ? 180 : 0));
+                        + (CowboyUtils.isRedAlliance() ? 180 : 0)) : Rotation2d.fromDegrees(0);
 
         var swerveModuleStates = DrivetrainConstants.DRIVE_KINEMATICS.toSwerveModuleStates(
                 fieldRelative
