@@ -25,6 +25,7 @@ public class CanCoder
 	 * @return the current raw position of the absolute encoder in radians.
 	 */
 	public double getPosition() {
+		
 		return (inverted ? -1.0 : 1.0) * Units.rotationsToRadians(canCoder.getAbsolutePosition().getValueAsDouble());
 	}
 
